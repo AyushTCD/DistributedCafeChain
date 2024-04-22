@@ -1,0 +1,40 @@
+version: '3'
+
+networks:
+  api-network:
+  mysql-cluster:
+    external: true
+    name: mysql-cluster
+
+services:
+  reverse-proxy:
+    image: traefik:v2.11
+    command: 
+      - --api.insecure=true
+      - --providers.docker
+      - --providers.docker.exposedbydefault=false
+      - --entryPoints.http.address=:8080
+      - --entryPoints.traefik.address=:8081
+    networks:
+      - api-network
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+  api:
+    build: .
+    deploy:
+      replicas: 3
+    networks:
+      - api-network
+      - mysql-cluster
+    environment:
+      GIN_MODE: release
+      MYSQL_URI: isabelle:password@tcp(10.100.2.2:3306)/loyalty_program?charset=utf8mb4&parseTime=True
+    volumes:
+      - "./loyalty-service.toml:/root/loyalty-service.toml:ro"
+    labels:
+      - "traefik.docker.network=api-network"
+      - "traefik.enable=true"
+      - "traefik.http.routers.loyalty-service-api.rule=PathPrefix(`/`)"
